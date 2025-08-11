@@ -1,7 +1,7 @@
 // src/app/page.tsx
 'use client'; // This directive is required for Client Components
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { generateClient } from 'aws-amplify/api';
 import { configureAmplify } from '../configureAmplify';
 
@@ -46,10 +46,13 @@ const getNotesQuery = `
 `;
 
 const getNotesBySentimentQuery = `
-  query GetNotes {
-    getNotes {
-      items ($sentiment: Sentiment!) {
-        id text sentiment dateCreated
+  query GetNotesBySentiment($sentiment: Sentiment!) {
+    getNotes(sentiment: $sentiment) {
+      items {
+        id
+        text
+        sentiment
+        dateCreated
       }
     }
   }
@@ -60,11 +63,49 @@ export default function Home() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState('');
   const [sentiment, setSentiment] = useState('neutral');
-  const [sentimentFilter, setSentimentFilter] = useState('neutral');
+  const [sentimentFilter, setSentimentFilter] = useState('all');
 
-  useEffect(() => {
-    fetchNotes();
+  const fetchAllNotes = useCallback(async () => {
+    try {
+      const result = (await client.graphql({
+        query: getNotesQuery,
+      })) as { data: GetNotesData };
+
+      const fetchedNotes = result.data.getNotes.items;
+      if (fetchedNotes) {
+        setNotes(fetchedNotes);
+      }
+    } catch (error) {
+      console.error("Error fetching all notes:", error);
+    }
   }, []);
+
+  const fetchNotesBySentiment = useCallback(async (filter: string) => {
+    try {
+      const result = (await client.graphql({
+        query: getNotesBySentimentQuery,
+        variables: { sentiment: filter }
+      })) as { data: GetNotesData };
+
+      const fetchedNotes = result.data.getNotes.items;
+      if (fetchedNotes) {
+        setNotes(fetchedNotes);
+      }
+    } catch (error) {
+      console.error("Error fetching notes by sentiment:", error);
+    }
+  }, []);
+
+
+useEffect(() => {
+    if (sentimentFilter === 'all') {
+      fetchAllNotes();
+    } else {
+      fetchNotesBySentiment(sentimentFilter);
+    }
+  }, [sentimentFilter, fetchAllNotes, fetchNotesBySentiment]);
+
+
 
   async function fetchNotes() {
     try {
@@ -100,12 +141,10 @@ export default function Home() {
   }
 
 
-  async function getNotesBySentiment(sentiment: string) {   
-    if (!sentiment) return;
-     setSentimentFilter(sentiment)
 
+
+  async function getNotesBySentiment() {   
     try {
-       
       const result = (await client.graphql({
         query: getNotesBySentimentQuery,
         variables: { sentimentFilter }
@@ -116,7 +155,7 @@ export default function Home() {
         setNotes(fetchedNotes);
       }
     } catch (error) {
-      console.error("Error creating note:", error);
+      console.error("Error feching notes:", error);
     }
   }
 
@@ -140,6 +179,7 @@ export default function Home() {
             onChange={(e) => setSentiment(e.target.value)}
             className="p-2 border rounded-md bg-white text-gray-800"
           >
+            
             <option value="neutral">Neutral</option>
             <option value="happy">Happy</option>
             <option value="sad">Sad</option>
@@ -155,10 +195,11 @@ export default function Home() {
         <label htmlFor="filterNotes">Filtrar por sentimento:</label>
         <select
             value={sentiment}
-            onChange={(e) => getNotesBySentiment(e.target.value)}
+            onChange={(e) => setSentimentFilter(e.target.value)}
             className="p-2 border rounded-md bg-white text-gray-800"
             id="filterNotes"
           >
+            <option value="all">Show All</option>
             <option value="neutral">Neutral</option>
             <option value="happy">Happy</option>
             <option value="sad">Sad</option>
