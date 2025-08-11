@@ -120,6 +120,7 @@ export class BackendStack extends cdk.Stack {
     // 4. AWS Amplify Hosting using L1 Constructs
     const amplifyApp = new amplify.CfnApp(this, 'NotesWebApp', {
       name: 'notes-web-app',
+      platform: 'WEB_COMPUTE',
        // Read repository and token from environment variables
       repository: process.env.GITHUB_REPO_URL,
       oauthToken: process.env.GITHUB_TOKEN,
@@ -127,34 +128,36 @@ export class BackendStack extends cdk.Stack {
         { name: 'NEXT_PUBLIC_GRAPHQL_URL', value: api.graphqlUrl },
         { name: 'NEXT_PUBLIC_API_KEY', value: api.apiKey || '' },
         { name: 'NEXT_PUBLIC_AWS_REGION', value: this.region },
+        { name: 'AMPLIFY_MONOREPO_APP_ROOT', value:"website/notes-app-frontend" },
       ],
       // The build spec for a Next.js (Amplify Hosting Compute) app
       buildSpec: `
         version: 1
-        frontend:
-          phases:
-            preBuild:
-              commands:
-                - cd website
-                - npm ci
-            build:
-              commands:
-                - npm run build
-          artifacts:
-            baseDirectory: website/.next
-            files:
-              - '**/*'
-          cache:
-            paths:
-              - node_modules/**/*
+        applications:
+          - appRoot: website/notes-app-frontend
+            frontend:
+              phases:
+                preBuild:
+                  commands:
+                    - npm ci --cache .npm --prefer-offline
+                build:
+                  commands:
+                    - npm run build
+              artifacts:
+                baseDirectory: .next
+                files:
+                  - '**/*'
+            
       `
     });
 
     // Add a branch for deployment, e.g., 'main'
-    new amplify.CfnBranch(this, 'MainBranch', {
+    new amplify.CfnBranch(this, 'mainDeployment', {
       appId: amplifyApp.attrAppId,
       branchName: 'main',
+      enableAutoBuild: true,
       stage: 'PRODUCTION',
+      framework: 'Next.js - SSR'
     });
 
     // 5. CDK Outputs
