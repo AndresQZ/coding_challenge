@@ -45,11 +45,22 @@ const getNotesQuery = `
   }
 `;
 
+const getNotesBySentimentQuery = `
+  query GetNotes {
+    getNotes {
+      items ($sentiment: Sentiment!) {
+        id text sentiment dateCreated
+      }
+    }
+  }
+`;
+
 
 export default function Home() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [noteText, setNoteText] = useState('');
   const [sentiment, setSentiment] = useState('neutral');
+  const [sentimentFilter, setSentimentFilter] = useState('neutral');
 
   useEffect(() => {
     fetchNotes();
@@ -82,7 +93,28 @@ export default function Home() {
       });
       setNoteText('');
       setSentiment('neutral');
-      fetchNotes(); // Refresh the list
+      fetchNotes();
+    } catch (error) {
+      console.error("Error creating note:", error);
+    }
+  }
+
+
+  async function getNotesBySentiment(sentiment: string) {   
+    if (!sentiment) return;
+     setSentimentFilter(sentiment)
+
+    try {
+       
+      const result = (await client.graphql({
+        query: getNotesBySentimentQuery,
+        variables: { sentimentFilter }
+      })) as { data: GetNotesData };
+
+      const fetchedNotes = result.data.getNotes.items;
+      if (fetchedNotes) {
+        setNotes(fetchedNotes);
+      }
     } catch (error) {
       console.error("Error creating note:", error);
     }
@@ -120,6 +152,18 @@ export default function Home() {
       </form>
 
       <div className="mt-12 w-full max-w-2xl">
+        <label htmlFor="filterNotes">Filtrar por sentimento:</label>
+        <select
+            value={sentiment}
+            onChange={(e) => getNotesBySentiment(e.target.value)}
+            className="p-2 border rounded-md bg-white text-gray-800"
+            id="filterNotes"
+          >
+            <option value="neutral">Neutral</option>
+            <option value="happy">Happy</option>
+            <option value="sad">Sad</option>
+            <option value="angry">Angry</option>
+        </select>
         <h2 className="text-2xl font-semibold mb-4 text-white">Your Notes</h2>
         {notes.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()).map(note => (
           <div key={note.id} className="bg-gray-800 p-4 rounded-lg mb-4 shadow">
